@@ -907,7 +907,7 @@ EOT;
 	 * : Only perform updates for minor releases (e.g. update from WP 4.3 to 4.3.3 instead of 4.4.2).
 	 *
 	 * [--version=<version>]
-	 * : Update to a specific version, instead of to the latest version. Alternatively accepts 'nightly'.
+	 * : Update to a specific version, instead of to the latest version. Alternatively accepts 'nightly' or 'beta'.
 	 *
 	 * [--force]
 	 * : Update even when installed WP version is greater than the requested version.
@@ -1002,6 +1002,49 @@ EOT;
 				}
 			}
 
+		} else if ( 'beta' === $assoc_args['version'] ) {
+			// Modify update fetch request to get the beta data.
+			$http_filter = function( $result, $args, $url ) {
+				if ( $result || isset( $args['_beta_tester'] ) ) {
+					return $result;
+				}
+				if ( false === strpos( $url, '//api.wordpress.org/core/version-check/' ) ) {
+					return $result;
+				}
+
+				// It's a core-update request.
+				$args['_beta_tester'] = true;
+				$mangled_version = $GLOBALS['wp_version'];
+				if ( ! function_exists( 'get_preferred_from_update_core' ) ) {
+					require_once( ABSPATH . 'wp-admin/includes/update.php' );
+				}
+
+				$preferred = get_preferred_from_update_core();
+				if ( false === $preferred ) {
+					wp_version_check();
+					$preferred = get_preferred_from_update_core();
+				}
+				var_dump( $preferred );
+				if ( isset( $preferred->current ) ) {
+					$versions = array_map( 'intval', explode( '.', $preferred->current ) );
+					$versions[2] = isset( $versions[2] ) ? $versions[2] + 1 : 1;
+					$mangled_version  = $versions[0] . '.' . $versions[1] . '.' . $versions[2] . '-wp-beta-tester';
+				}
+				$url = str_replace( 'version=' . $GLOBALS['wp_version'], 'version=' . $mangled_version, $url );
+				
+				error_log( $url );
+				error_log( 'hit' );
+				return wp_remote_get( $url, $args );
+			};
+			add_filter( 'pre_http_request', $http_filter, 10, 3 );
+			wp_version_check( array(), true ); // Force an update check.
+			remove_filter( 'pre_http_request', $http_filter );
+			$from_api = get_site_transient( 'update_core' );
+			// var_dump( $from_api );
+			exit;
+			if ( ! empty( $from_api->updates ) ) {
+				list( $update ) = $from_api->updates;
+			}
 		} else if (	\WP_CLI\Utils\wp_version_compare( $assoc_args['version'], '<' )
 			|| 'nightly' === $assoc_args['version']
 			|| \WP_CLI\Utils\get_flag_value( $assoc_args, 'force' ) ) {

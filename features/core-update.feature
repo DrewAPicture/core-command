@@ -260,3 +260,25 @@ Feature: Update WordPress core
     | version    |
     | trunk      |
     | nightly    |
+
+  @daniel
+  Scenario: Use `--version=beta` to update to the latest beta version
+    Given a WP install
+
+    When I run `wp core version`
+    Then STDOUT should be:
+      """
+      4.8.2
+      """
+
+    When I run `wp core update --version=beta`
+    Then STDOUT should contain:
+      """
+      Success: WordPress updated successfully.
+      """
+
+    When I run `wp core version`
+    Then STDOUT should contain:
+      """
+      beta
+      """
